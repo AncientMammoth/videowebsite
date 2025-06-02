@@ -1,4 +1,4 @@
-import { supabase } from "@/lib/supabaseClient";
+import { supabase } from "@/integrations/supabase/client";
 import { useState } from "react";
 import { Search, Upload, Play, Eye, Clock } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -127,7 +127,7 @@ const Index = () => {
   const videoUrl = publicUrlData.publicUrl;
 
   // Save to Supabase DB
-  const { data, error: insertError } = await supabase
+  /*const { data, error: insertError } = await supabase
     .from("videos")
     .insert([
       {
@@ -147,6 +147,7 @@ const Index = () => {
     });
     return;
   }
+  */
 
   // Update local UI
   const newVideo: Video = {
