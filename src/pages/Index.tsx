@@ -1,4 +1,4 @@
-
+import { supabase } from "@/lib/supabaseClient";
 import { useState } from "react";
 import { Search, Upload, Play, Eye, Clock } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -25,6 +25,9 @@ const Index = () => {
   const [uploadOpen, setUploadOpen] = useState(false);
   const [uploadTitle, setUploadTitle] = useState("");
   const [uploadDescription, setUploadDescription] = useState("");
+  const [uploadFile, setUploadFile] = useState<File | null>(null);
+  const [lengthFilter, setLengthFilter] = useState<"all" | "short" | "medium" | "long">("all");
+  const [uploadThumbnail, setUploadThumbnail] = useState<File | null>(null);
   const [videos, setVideos] = useState<Video[]>([
     {
       id: "1",
@@ -88,42 +91,103 @@ const Index = () => {
     }
   ]);
 
-  const handleUpload = () => {
-    if (!uploadTitle.trim() || !uploadDescription.trim()) {
-      toast({
-        title: "Error",
-        description: "Please fill in both title and description.",
-        variant: "destructive"
-      });
-      return;
-    }
-
-    const newVideo: Video = {
-      id: Date.now().toString(),
-      title: uploadTitle,
-      description: uploadDescription,
-      thumbnail: "https://images.unsplash.com/photo-1492684223066-81342ee5ff30?w=800&h=450&fit=crop&crop=center",
-      duration: "0:00",
-      views: "0",
-      uploadedAt: "Just now",
-      channel: "Your Channel"
-    };
-
-    setVideos([newVideo, ...videos]);
-    setUploadTitle("");
-    setUploadDescription("");
-    setUploadOpen(false);
-    
+  const handleUpload = async () => {
+  if (!uploadTitle.trim() || !uploadDescription.trim() || !uploadFile) {
     toast({
-      title: "Success!",
-      description: "Your video has been uploaded successfully.",
+      title: "Error",
+      description: "Please fill in all fields and select a video file.",
+      variant: "destructive"
     });
+    return;
+  }
+
+  const fileExt = uploadFile.name.split('.').pop();
+  const fileName = `${Date.now()}.${fileExt}`;
+  const filePath = `videos/${fileName}`;
+
+  // Upload to Supabase Storage
+  const { error: uploadError } = await supabase.storage
+    .from("videos")
+    .upload(filePath, uploadFile);
+
+  if (uploadError) {
+    toast({
+      title: "Upload failed",
+      description: uploadError.message,
+      variant: "destructive",
+    });
+    return;
+  }
+
+  const { data: publicUrlData } = supabase
+    .storage
+    .from("videos")
+    .getPublicUrl(filePath);
+
+  const videoUrl = publicUrlData.publicUrl;
+
+  // Save to Supabase DB
+  const { data, error: insertError } = await supabase
+    .from("videos")
+    .insert([
+      {
+        title: uploadTitle,
+        description: uploadDescription,
+        video_url: videoUrl,
+      }
+    ])
+    .select()
+    .single();
+
+  if (insertError) {
+    toast({
+      title: "Error saving metadata",
+      description: insertError.message,
+      variant: "destructive"
+    });
+    return;
+  }
+
+  // Update local UI
+  const newVideo: Video = {
+    id: Date.now().toString(),
+    title: uploadTitle,
+    description: uploadDescription,
+    thumbnail: uploadThumbnail ? URL.createObjectURL(uploadThumbnail) : "https://images.unsplash.com/photo-1492684223066-81342ee5ff30?w=800&h=450&fit=crop&crop=center",
+    duration: "0:00",
+    views: "0",
+    uploadedAt: "Just now",
+    channel: "Your Channel"
   };
 
-  const filteredVideos = videos.filter(video =>
-    video.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    video.description.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  setVideos([newVideo, ...videos]);
+  setUploadTitle("");
+  setUploadDescription("");
+  setUploadFile(null);
+  setUploadOpen(false);
+
+  toast({
+    title: "Upload Successful",
+    description: "Your video has been uploaded.",
+  });
+};
+
+  const filteredVideos = videos.filter((video) => {
+    const matchesSearch =
+      video.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      video.description.toLowerCase().includes(searchQuery.toLowerCase());
+
+    const [minutes, seconds] = video.duration.split(":").map(Number);
+    const totalSeconds = minutes * 60 + seconds;
+
+    const matchesLength =
+      lengthFilter === "all" ||
+      (lengthFilter === "short" && totalSeconds < 5 * 60) ||
+      (lengthFilter === "medium" && totalSeconds >= 5 * 60 && totalSeconds <= 20 * 60) ||
+      (lengthFilter === "long" && totalSeconds > 20 * 60);
+
+    return matchesSearch && matchesLength;
+  });
 
   return (
     <div className="min-h-screen bg-gray-950">
@@ -139,9 +203,10 @@ const Index = () => {
               <h1 className="text-xl font-bold text-white">VideoHub</h1>
             </div>
 
-            {/* Search */}
-            <div className="flex-1 max-w-2xl mx-8">
-              <div className="relative">
+          {/* Search and Filter */}
+          <div className="flex flex-col md:flex-row items-start md:items-center gap-4 flex-1 max-w-3xl mx-8">
+            {/* Search Bar */}
+              <div className="relative w-full">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
                 <Input
                   type="text"
@@ -151,7 +216,22 @@ const Index = () => {
                   className="pl-10 bg-gray-800 border-gray-700 text-white placeholder-gray-400 focus:border-red-500"
                 />
               </div>
-            </div>
+
+            {/* Duration Filter Dropdown */}
+              <div className="w-full md:w-auto">
+                <select
+                value={lengthFilter}
+                onChange={(e) => setLengthFilter(e.target.value as any)}
+                className="bg-gray-800 text-white border border-gray-700 rounded px-3 py-2 w-full"
+                >
+                  <option value="all">All Lengths</option>
+                  <option value="short">Short (&lt; 5 min)</option>
+                  <option value="medium">Medium (5–20 min)</option>
+                  <option value="long">Long (&gt; 20 min)</option>
+                  </select>
+              </div>
+          </div>
+        
 
             {/* Upload Button */}
             <Dialog open={uploadOpen} onOpenChange={setUploadOpen}>
@@ -186,6 +266,27 @@ const Index = () => {
                       className="bg-gray-800 border-gray-700 text-white min-h-[100px]"
                     />
                   </div>
+
+                    <div>
+                      <Label htmlFor="thumbnailFile">Thumbnail Image</Label>
+                      <Input
+                        id="thumbnailFile"
+                        type="file"
+                        accept="image/*"
+                        onChange={(e) => setUploadThumbnail(e.target.files?.[0] || null)}
+                        className="bg-gray-800 border-gray-700 text-white"
+                      />
+                    </div>
+                  <div>
+                      <Label htmlFor="videoFile">Video File</Label>
+                      <Input
+                        id="videoFile"
+                        type="file"
+                        accept="video/*"
+                        onChange={(e) => setUploadFile(e.target.files?.[0] || null)}
+                        className="bg-gray-800 border-gray-700 text-white"
+                      />
+                    </div>
                   <Button onClick={handleUpload} className="w-full bg-red-600 hover:bg-red-700">
                     Upload Video
                   </Button>
