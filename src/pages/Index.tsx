@@ -223,7 +223,7 @@ const Index = () => {
                 <select
                 value={lengthFilter}
                 onChange={(e) => setLengthFilter(e.target.value as any)}
-                className="bg-gray-800 text-white border border-gray-700 rounded px-3 py-2 w-full"
+                className="bg-gray-800 text-white border border-gray-700 rounded px-3 py-2 w-full font-mono"
                 >
                   <option value="all">All Lengths</option>
                   <option value="short">Short (&lt; 5 min)</option>
@@ -242,7 +242,7 @@ const Index = () => {
                   Upload
                 </Button>
               </DialogTrigger>
-              <DialogContent className="bg-gray-900 border-gray-700 text-white">
+              <DialogContent className="bg-gray-900 border-gray-700 text-white font-mono">
                 <DialogHeader>
                   <DialogTitle>Upload Video</DialogTitle>
                 </DialogHeader>
