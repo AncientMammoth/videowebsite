@@ -201,7 +201,7 @@ const Index = () => {
               <div className="w-8 h-8 bg-red-600 rounded-lg flex items-center justify-center">
                 <Play className="h-5 w-5 text-white fill-current" />
               </div>
-              <h1 className="text-xl font-bold text-white">VideoHub</h1>
+              <h1 className="text-xl font-bold text-white font-serif">VideoHub</h1>
             </div>
 
           {/* Search and Filter */}
